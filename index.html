@@ -1,276 +1,72 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <meta name="theme-color" content="#E85B98" />
-    <meta name="description" content="Mawah – مواح | مكان إلنا نحن الاثنين. مساحة رقمية رومانسية للرسم والتواصل الفوري بين شخصين." />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="مواح" />
-    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
-    <link rel="manifest" href="./manifest.json" />
-    <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./style.css" />
-    <title>Mawah – مواح | مكان إلنا نحن الاثنين</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مواح - Mawah</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- مكتبة Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-    <div id="connectionBanner" class="connection-banner hidden" role="status" aria-live="polite">
-        <span id="connectionBannerText">انقطع الاتصال بالإنترنت… نحاول إعادة الاتصال</span>
-    </div>
-    <div id="reactionStage" class="reaction-stage" aria-hidden="true"></div>
-    <div id="toastContainer" class="toast-container" aria-live="polite"></div>
 
-    <main id="landingView" class="view landing-view active">
-        <div class="landing-card glass-card">
-            <div class="brand-heart-badge" aria-hidden="true">
-                <svg viewBox="0 0 64 64" class="heart-svg">
-                    <defs>
-                        <linearGradient id="mawahHeartGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" stop-color="#FF85B8" />
-                            <stop offset="100%" stop-color="#E85B98" />
-                        </linearGradient>
-                    </defs>
-                    <path fill="url(#mawahHeartGrad)" d="M32 56.5C30.8 56.5 29.7 56.1 28.8 55.3C14.2 42.6 6 34.4 6 23.2C6 14.6 12.7 8 21.1 8C25.9 8 30.3 10.2 32 13.7C33.7 10.2 38.1 8 42.9 8C51.3 8 58 14.6 58 23.2C58 34.4 49.8 42.6 35.2 55.3C34.3 56.1 33.2 56.5 32 56.5Z" />
-                </svg>
-            </div>
-            <div class="brand-titles">
-                <h1 class="brand-name">Mawah <span>–</span> مواح</h1>
-                <p class="brand-slogan">«مكان إلنا نحن الاثنين»</p>
-            </div>
-            <h2 class="hero-headline">«خلّينا نرسم شيئًا يشبهنا»</h2>
-            <p class="hero-description">«رسمة منك، ورسمة مني… وكلها تبقى في مكان واحد يجمعنا مهما تباعدت المسافات.»</p>
+    <!-- شاشة تسجيل الدخول -->
+    <div id="auth-screen" class="screen active">
+        <div class="auth-card">
+            <div class="heart-icon">💖</div>
+            <h1>مواح - Mawah</h1>
+            <p class="subtitle">«مكان إلنا نحن الاثنين»</p>
+            <p class="quote">«خلينا نرسم شيئاً يشبهنا»</p>
+            <p class="sub-quote">«رسمة منك.. ورسمة مني... وكلها تبقى في مكان واحد يجمعنا مهما تباعدت المسافات.»</p>
+
             <div class="input-group">
-                <label for="userNameInput" class="input-label">اسمك في المساحة (مثل: حبيبي أو جوري)</label>
-                <input type="text" id="userNameInput" class="text-input" placeholder="اكتب اسمك هنا…" maxlength="24" autocomplete="off" />
+                <label for="partner-name">اسمك في المساحة (مثل: حبيبي أو جوري)</label>
+                <input type="text" id="partner-name" placeholder="جوري">
             </div>
-            <button id="createRoomBtn" class="btn btn-primary btn-lg btn-block" type="button">
-                <span>💗</span><span>أنشئ مساحتنا</span>
-            </button>
-            <div id="createdInviteBox" class="invite-created-box hidden">
-                <p>تم تجهيز مساحتنا الخاصة! شارك هذا الرمز مع شريكك:</p>
-                <div class="invite-code-display"><span id="generatedInviteCode" dir="ltr">----------</span></div>
-                <div class="invite-actions-row">
-                    <button id="copyInviteBtn" class="btn btn-secondary" type="button">نسخ الرمز</button>
-                    <button id="shareInviteBtn" class="btn btn-secondary" type="button">مشاركة الدعوة</button>
-                </div>
-                <button id="enterCreatedRoomBtn" class="btn btn-primary btn-block mt-12" type="button">ادخل إلى لوحتنا الآن ←</button>
-            </div>
-            <div class="divider"><span>أو انضم برمز دعوة</span></div>
-            <form id="joinRoomForm" class="join-form" novalidate>
-                <div class="join-row">
-                    <input type="text" id="inviteCodeInput" class="text-input" placeholder="أدخل رمز الدعوة" maxlength="12" dir="ltr" autocomplete="off" autocapitalize="characters" />
-                    <button id="joinRoomBtn" class="btn btn-soft btn-lg" type="submit">انضمام</button>
-                </div>
-            </form>
-            <div id="resumeRoomWrapper" class="resume-wrapper hidden">
-                <button id="resumeRoomBtn" class="btn btn-outline btn-block" type="button">
-                    العودة إلى مساحتنا السابقة (<span id="resumeRoomCode" dir="ltr"></span>)
-                </button>
-            </div>
-            <div id="configWarningBox" class="config-warning hidden"></div>
-        </div>
-    </main>
 
-    <div id="workspaceView" class="view workspace-view hidden">
+            <button id="join-btn" class="primary-btn">أنشئ مساحتنا 💖</button>
+            
+            <div class="input-group" style="margin-top: 20px;">
+                <label for="room-code">أو انضم برمز دعوة</label>
+                <input type="text" id="room-code" placeholder="ABCDEGHI">
+            </div>
+        </div>
+    </div>
+
+    <!-- الشاشة الرئيسية (الرسم والدردشة) -->
+    <div id="main-screen" class="screen">
         <header class="app-header">
-            <div class="header-right">
-                <span>💗</span>
-                <div>
-                    <div class="header-title">Mawah – مواح</div>
-                    <div class="presence-status">
-                        <span class="status-dot offline" id="partnerStatusDot"></span>
-                        <span id="partnerNameStatus">بانتظار دخول الشريك…</span>
-                    </div>
-                </div>
-            </div>
-            <div class="header-left">
-                <button id="headerInviteBtn" class="chip-btn" type="button" title="رمز الدعوة">
-                    <span>الرمز:</span> <strong id="headerRoomCode" dir="ltr">----</strong>
-                </button>
-                <button id="notifPermBtn" class="icon-btn" type="button" title="تفعيل الإشعارات">🔔</button>
-            </div>
+            <h2 id="room-title">غرفة المساحة</h2>
+            <button id="logout-btn" class="secondary-btn">خروج</button>
         </header>
 
-        <div class="workspace-body">
-            <section id="tabCanvas" class="tab-panel active">
-                <div class="canvas-meta-bar">
-                    <div id="lastDrawerBadge" class="last-drawer-badge">جاهزان للرسم معًا ✨</div>
-                    <div class="canvas-quick-actions">
-                        <button id="undoBtn" class="tool-mini-btn" type="button">↩️ تراجع</button>
-                        <button id="redoBtn" class="tool-mini-btn" type="button">↪️ إعادة</button>
-                        <button id="saveMemoryBtn" class="tool-mini-btn accent" type="button">💾 حفظ</button>
-                        <button id="downloadPngBtn" class="tool-mini-btn" type="button">⬇️ PNG</button>
-                    </div>
+        <div class="workspace">
+            <!-- قسم الرسم -->
+            <div class="canvas-container">
+                <div class="canvas-tools">
+                    <input type="color" id="color-picker" value="#ff4d6d">
+                    <input type="range" id="brush-size" min="1" max="20" value="5">
+                    <button id="eraser-btn">ممحاة</button>
+                    <button id="clear-canvas-btn">مسح الكل</button>
                 </div>
-                <div id="canvasContainer" class="canvas-container">
-                    <canvas id="sharedCanvas"></canvas>
-                </div>
-                <div class="tools-dock glass-card">
-                    <div class="scrollable-row">
-                        <button class="tool-btn active" data-tool="pen" type="button">✒️ <span>عادي</span></button>
-                        <button class="tool-btn" data-tool="soft" type="button">🖌️ <span>ناعم</span></button>
-                        <button class="tool-btn" data-tool="marker" type="button">🖍️ <span>عريض</span></button>
-                        <button class="tool-btn" data-tool="eraser" type="button">🧽 <span>ممحاة</span></button>
-                        <button class="tool-btn" data-tool="heart" type="button">❤️ <span>قلب</span></button>
-                        <button class="tool-btn" data-tool="emoji" type="button">🥰 <span>إيموجي</span></button>
-                        <button class="tool-btn" data-tool="text" type="button">🔤 <span>نص</span></button>
-                        <button id="clearCanvasBtn" class="tool-btn danger" type="button">🗑️ <span>مسح</span></button>
-                    </div>
-                    <div id="emojiPickerStrip" class="emoji-strip hidden">
-                        <button type="button" class="emoji-choice active" data-emoji="❤️">❤️</button>
-                        <button type="button" class="emoji-choice" data-emoji="😘">😘</button>
-                        <button type="button" class="emoji-choice" data-emoji="🥰">🥰</button>
-                        <button type="button" class="emoji-choice" data-emoji="🌹">🌹</button>
-                        <button type="button" class="emoji-choice" data-emoji="✨">✨</button>
-                        <button type="button" class="emoji-choice" data-emoji="🦋">🦋</button>
-                        <button type="button" class="emoji-choice" data-emoji="🌙">🌙</button>
-                        <button type="button" class="emoji-choice" data-emoji="💍">💍</button>
-                    </div>
-                    <div class="controls-row">
-                        <div class="color-palette">
-                            <button type="button" class="color-swatch active" data-color="#E85B98" style="background:#E85B98"></button>
-                            <button type="button" class="color-swatch" data-color="#3D2937" style="background:#3D2937"></button>
-                            <button type="button" class="color-swatch" data-color="#D92662" style="background:#D92662"></button>
-                            <button type="button" class="color-swatch" data-color="#8B5CF6" style="background:#8B5CF6"></button>
-                            <button type="button" class="color-swatch" data-color="#2563EB" style="background:#2563EB"></button>
-                            <button type="button" class="color-swatch" data-color="#059669" style="background:#059669"></button>
-                            <button type="button" class="color-swatch" data-color="#F59E0B" style="background:#F59E0B"></button>
-                            <input type="color" id="customColorPicker" class="custom-color-input" value="#E85B98" />
-                        </div>
-                        <div class="brush-size-control">
-                            <input type="range" id="brushSizeRange" min="2" max="28" value="5" />
-                            <span id="brushSizeLabel">5</span>
-                        </div>
-                        <div class="bg-palette">
-                            <button type="button" class="bg-swatch active" data-bg="#FFFFFF" style="background:#FFFFFF"></button>
-                            <button type="button" class="bg-swatch" data-bg="#FFF5F9" style="background:#FFF5F9"></button>
-                            <button type="button" class="bg-swatch" data-bg="#FFFBEB" style="background:#FFFBEB"></button>
-                            <button type="button" class="bg-swatch" data-bg="#F3F0FF" style="background:#F3F0FF"></button>
-                            <button type="button" class="bg-swatch" data-bg="#2A1B24" style="background:#2A1B24"></button>
-                        </div>
-                    </div>
-                </div>
-                <div class="interaction-bar glass-card">
-                    <div class="quick-reactions">
-                        <button type="button" class="react-btn" data-reaction="heart">❤️ قلب</button>
-                        <button type="button" class="react-btn" data-reaction="kiss">😘 قبلة</button>
-                        <button type="button" class="react-btn" data-reaction="miss_you">🥺 اشتقتلك</button>
-                        <button type="button" class="react-btn" data-reaction="im_here">أنا هون ❤️</button>
-                    </div>
-                    <form id="quickMessageForm" class="quick-msg-form">
-                        <input type="text" id="quickMessageInput" class="text-input" placeholder="اكتب رسالة قصيرة لشريكك…" maxlength="300" autocomplete="off" />
-                        <button type="submit" class="btn btn-primary">إرسال</button>
-                    </form>
-                    <div id="latestMessagesFeed" class="messages-feed" aria-live="polite"></div>
-                </div>
-            </section>
+                <canvas id="drawing-canvas"></canvas>
+            </div>
 
-            <section id="tabGallery" class="tab-panel hidden">
-                <div class="section-header">
-                    <h2>ذكرياتنا 🖼️</h2>
-                    <p>كل رسمة حفظناها تبقى شاهدة على لحظاتنا الحلوة</p>
+            <!-- قسم الدردشة -->
+            <div class="chat-container">
+                <div id="messages-list" class="messages-list"></div>
+                <div class="chat-input-area">
+                    <input type="text" id="message-input" placeholder="اكتب رسالة لطيفة...">
+                    <button id="send-msg-btn">إرسال</button>
                 </div>
-                <div id="galleryGrid" class="gallery-grid">
-                    <div class="empty-state">لا توجد رسومات محفوظة بعد… ارسموا أول ذكرى الآن 💗</div>
-                </div>
-            </section>
-
-            <section id="tabTime" class="tab-panel hidden">
-                <div class="section-header">
-                    <h2>الوقت الذي يجمعنا ⏳💗</h2>
-                    <p id="romanticRotatingQuote">«كل يوم يمر معك هو أجمل سطر في حكايتنا.»</p>
-                </div>
-                <div class="love-counter-card glass-card">
-                    <div id="counterNotSetPrompt">
-                        <p>حدّد تاريخ بداية علاقتنا أو التاريخ المميز لنا من الأسفل ليبدأ العداد:</p>
-                    </div>
-                    <div id="counterDisplay" class="counter-grid hidden">
-                        <div class="counter-box"><span id="countMonths" class="counter-num">0</span><span>شهر</span></div>
-                        <div class="counter-box highlight"><span id="countDays" class="counter-num">0</span><span>يوم معًا</span></div>
-                        <div class="counter-box"><span id="countHours" class="counter-num">0</span><span>ساعة</span></div>
-                        <div class="counter-box"><span id="countMinutes" class="counter-num">0</span><span>دقيقة</span></div>
-                    </div>
-                    <p id="startDateSummary" class="start-date-summary"></p>
-                </div>
-                <div class="settings-card glass-card">
-                    <h3>إعدادات مساحتنا ⚙️</h3>
-                    <div class="input-group">
-                        <label for="relationshipDateInput" class="input-label">تاريخ بداية علاقتنا</label>
-                        <div class="join-row">
-                            <input type="date" id="relationshipDateInput" class="text-input" />
-                            <button id="saveRelationshipDateBtn" class="btn btn-primary" type="button">حفظ التاريخ</button>
-                        </div>
-                    </div>
-                    <div class="input-group mt-16">
-                        <label for="settingsNameInput" class="input-label">اسمك الظاهر للشريك</label>
-                        <div class="join-row">
-                            <input type="text" id="settingsNameInput" class="text-input" maxlength="24" />
-                            <button id="updateNameBtn" class="btn btn-soft" type="button">تحديث</button>
-                        </div>
-                    </div>
-                    <div class="settings-info-box mt-16">
-                        <div><strong>رمز مساحتنا:</strong> <span id="settingsRoomCode" dir="ltr">----</span></div>
-                        <div><strong>الأعضاء:</strong> <span id="settingsMembersList">—</span></div>
-                    </div>
-                    <div class="ios-pwa-guide mt-16">
-                        <h4>تثبيت التطبيق على الآيفون (Safari) 📱</h4>
-                        <ol>
-                            <li>افتح الموقع في متصفح <strong>Safari</strong>.</li>
-                            <li>اضغط على زر المشاركة <strong>Share (⬆️)</strong> في الأسفل.</li>
-                            <li>اختر <strong>إضافة إلى الشاشة الرئيسية (Add to Home Screen)</strong>.</li>
-                            <li>افتح التطبيق من أيقونته لتفعيل وضع ملء الشاشة والإشعارات.</li>
-                        </ol>
-                    </div>
-                    <button id="leaveRoomBtn" class="btn btn-outline danger-outline btn-block mt-16" type="button">الخروج إلى الصفحة الرئيسية</button>
-                </div>
-            </section>
-        </div>
-
-        <nav class="bottom-nav">
-            <button type="button" class="nav-item active" data-target="tabCanvas"><span>🎨</span><span>لوحتنا</span></button>
-            <button type="button" class="nav-item" data-target="tabGallery"><span>🖼️</span><span>ذكرياتنا</span></button>
-            <button type="button" class="nav-item" data-target="tabTime"><span>💗</span><span>وقتُنا</span></button>
-        </nav>
-    </div>
-
-    <div id="confirmModal" class="modal-backdrop hidden">
-        <div class="modal-card glass-card">
-            <h3 id="confirmModalTitle">تأكيد</h3>
-            <p id="confirmModalMessage">هل أنت متأكد؟</p>
-            <div class="modal-actions">
-                <button id="confirmCancelBtn" class="btn btn-soft" type="button">إلغاء</button>
-                <button id="confirmOkBtn" class="btn btn-primary" type="button">نعم، متأكد</button>
             </div>
         </div>
     </div>
 
-    <div id="textStampModal" class="modal-backdrop hidden">
-        <div class="modal-card glass-card">
-            <h3>أضف عبارة على اللوحة ✍️</h3>
-            <input type="text" id="canvasTextInput" class="text-input mt-12" placeholder="اكتب كلمتك هنا (مثل: أحبك يا جوري)…" maxlength="60" />
-            <div class="modal-actions">
-                <button id="textStampCancelBtn" class="btn btn-soft" type="button">إلغاء</button>
-                <button id="textStampOkBtn" class="btn btn-primary" type="button">إضافة للوحة</button>
-            </div>
-        </div>
-    </div>
+    <footer class="app-footer">
+        <span class="netlify-badge">Powered by Netlify</span>
+    </footer>
 
-    <div id="imageViewerModal" class="modal-backdrop hidden">
-        <div class="viewer-card">
-            <button id="closeViewerBtn" class="viewer-close-btn" type="button">✕</button>
-            <img id="viewerImage" src="" alt="ذكرى محفوظة" />
-            <div class="viewer-meta">
-                <span id="viewerCaption"></span>
-                <a id="viewerDownloadLink" class="btn btn-primary btn-sm" download="mawah-memory.png">⬇️ تنزيل الصورة</a>
-            </div>
-        </div>
-    </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script type="module" src="./app.js"></script>
+    <script type="module" src="app.js"></script>
 </body>
 </html>

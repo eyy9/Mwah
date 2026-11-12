@@ -46,8 +46,22 @@ if (!supabase) {
 function resizeCanvas() {
     const rect = canvas.parentElement.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
-    canvas.width = Math.round(rect.width);
-    canvas.height = Math.round(rect.height);
+
+    const width = Math.round(rect.width);
+    const height = Math.round(rect.height);
+    if (canvas.width === width && canvas.height === height) return;
+
+    const previousCanvas = document.createElement('canvas');
+    const hasPreviousDrawing = canvas.width > 0 && canvas.height > 0;
+    if (hasPreviousDrawing) {
+        previousCanvas.width = canvas.width;
+        previousCanvas.height = canvas.height;
+        previousCanvas.getContext('2d').drawImage(canvas, 0, 0);
+    }
+
+    canvas.width = width;
+    canvas.height = height;
+    if (hasPreviousDrawing) ctx.drawImage(previousCanvas, 0, 0, width, height);
 }
 
 async function joinRoom() {

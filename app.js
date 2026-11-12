@@ -136,13 +136,16 @@ function appendMessage(msg) {
 
 function subscribeToRealtime() {
     supabase
-        .channel('room-channel')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_code=eq.${currentRoom}` }, payload => {
-            appendMessage(payload.new);
+        .channel('room-sync-' + currentRoom)
+        .on('postgres_changes', { 
+            event: 'INSERT', 
+            schema: 'public', 
+            table: 'messages'
+        }, payload => {
+            // التحقق من أن الرسالة تخص نفس الغرفة الحالية
+            if (payload.new && payload.new.room_code === currentRoom) {
+                appendMessage(payload.new);
+            }
         })
         .subscribe();
 }
-
-logoutBtn.addEventListener('click', () => {
-    location.reload();
-});

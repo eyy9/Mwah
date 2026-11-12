@@ -82,14 +82,13 @@ joinBtn.addEventListener('click', () => {
             statusBanner.style.color = '#155724';
         }
         loadMessages();
-        // تحديث وتناغم فوري بين الطرفين كل ثانية ونصف
         if (messagePollInterval) clearInterval(messagePollInterval);
         messagePollInterval = setInterval(loadMessages, 1500);
     }
 });
 
 // ==========================================
-// 1. الرسم والتفاعل
+// الرسم
 // ==========================================
 let drawing = false;
 let lastX = 0;
@@ -170,7 +169,7 @@ clearCanvasBtn.addEventListener('click', () => {
 });
 
 // ==========================================
-// 2. الدردشة والإرسال المباشر للطرفين
+// الدردشة الإرسال المباشر
 // ==========================================
 sendMsgBtn.addEventListener('click', sendMessage);
 messageInput.addEventListener('keypress', (e) => {
@@ -186,18 +185,18 @@ async function sendMessage() {
     try {
         const { error } = await supabase
             .from('messages')
-            .insert([{
+            .insert({
                 room_id: currentRoom,
                 sender_id: currentUserId,
                 sender_name: currentUser,
                 content: text
-            }]);
+            });
 
         if (error) {
-            console.error('Insert error:', error);
-            alert('حدث خطأ في إرسال الرسالة لقاعدة البيانات');
+            console.error('Insert error details:', error);
+            alert('خطأ من القاعدة: ' + error.message);
         } else {
-            loadMessages(); // جلب الرسائل فوراً لتظهر عند الطرفين
+            loadMessages();
         }
     } catch (err) {
         console.error('Send catch error:', err);
@@ -217,9 +216,7 @@ async function loadMessages() {
             messagesList.innerHTML = '';
             data.forEach(appendMessage);
         }
-    } catch (err) {
-        console.error('Load error:', err);
-    }
+    } catch (err) {}
 }
 
 function appendMessage(msg) {

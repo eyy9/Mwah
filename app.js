@@ -9,7 +9,6 @@ let isEraser = false;
 const authScreen = document.getElementById('auth-screen');
 const mainScreen = document.getElementById('main-screen');
 const joinBtn = document.getElementById('join-btn');
-const joinCodeBtn = document.getElementById('join-code-btn');
 const partnerNameInput = document.getElementById('partner-name');
 const roomCodeInput = document.getElementById('room-code');
 const logoutBtn = document.getElementById('logout-btn');
@@ -31,14 +30,13 @@ function resizeCanvas() {
     canvas.width = rect.width;
     canvas.height = rect.height;
 }
-window.addEventListener('resize', resizeCanvas);
 
-function handleJoin() {
+joinBtn.addEventListener('click', () => {
     const name = partnerNameInput.value.trim();
     const code = roomCodeInput.value.trim();
 
     if (!name || !code) {
-        alert('الرجاء إدخال الاسم ورمز الغرفة ❤️');
+        alert('الرجاء كتابة الاسم ورمز الغرفة ❤️');
         return;
     }
 
@@ -53,10 +51,7 @@ function handleJoin() {
     initDrawing();
     loadMessages();
     subscribeToRealtime();
-}
-
-joinBtn.addEventListener('click', handleJoin);
-if (joinCodeBtn) joinCodeBtn.addEventListener('click', handleJoin);
+});
 
 let drawing = false;
 
@@ -111,16 +106,10 @@ async function sendMessage() {
     const text = messageInput.value.trim();
     if (!text) return;
 
-    const { error } = await supabase.from('messages').insert([
+    await supabase.from('messages').insert([
         { room_code: currentRoom, sender: currentUser, content: text }
     ]);
-
-    if (error) {
-        console.error(error);
-        alert('فشل إرسال الرسالة، تأكد من الاتصال');
-    } else {
-        messageInput.value = '';
-    }
+    messageInput.value = '';
 }
 
 async function loadMessages() {
@@ -157,17 +146,3 @@ function subscribeToRealtime() {
 logoutBtn.addEventListener('click', () => {
     location.reload();
 });
-// التحديث اللحظي (Realtime) المباشر
-function subscribeToRealtime() {
-    supabase
-        .channel('public:messages')
-        .on('postgres_changes', { 
-            event: 'INSERT', 
-            schema: 'public', 
-            table: 'messages', 
-            filter: `room_code=eq.${currentRoom}` 
-        }, payload => {
-            appendMessage(payload.new);
-        })
-        .subscribe();
-}

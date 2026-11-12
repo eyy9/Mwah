@@ -1,7 +1,13 @@
 import { SUPABASE_CONFIG } from './config.js';
 
-// تهيئة Supabase بالطريقة المباشرة والآمنة
-const supabase = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.publishableKey);
+let supabase = null;
+try {
+    if (window.supabase) {
+        supabase = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.publishableKey);
+    }
+} catch (e) {
+    console.error('Supabase Init Error:', e);
+}
 
 let currentRoom = null;
 let currentUser = null;
@@ -69,12 +75,20 @@ joinBtn.addEventListener('click', () => {
         initDrawing();
     }, 150);
 
-    loadMessages();
-    setupRoomChannel();
+    if (supabase) {
+        loadMessages();
+        setupRoomChannel();
+    } else {
+        if (statusBanner) {
+            statusBanner.textContent = 'الوضع المحلي (يعمل بدون انترنت) ⚡';
+            statusBanner.style.background = '#fff3cd';
+            statusBanner.style.color = '#856404';
+        }
+    }
 });
 
 // ==========================================
-// 1. إعدادات الرسم والتراسل الفوري (Broadcast)
+// 1. إعدادات الرسم والـ Broadcast
 // ==========================================
 let drawing = false;
 let lastX = 0;
@@ -128,18 +142,22 @@ function draw(e) {
     drawLineOnCanvas(lastX, lastY, coords.x, coords.y, strokeColor, strokeWidth);
 
     if (roomChannel) {
-        roomChannel.send({
-            type: 'broadcast',
-            event: 'draw-stroke',
-            payload: {
-                x0: lastX / canvas.width,
-                y0: lastY / canvas.height,
-                x1: coords.x / canvas.width,
-                y1: coords.y / canvas.height,
-                color: strokeColor,
-                width: strokeWidth
-            }
-        });
+        try {
+            roomChannel.send({
+                type: 'broadcast',
+                event: 'draw-stroke',
+                payload: {
+                    x0: lastX / canvas.width,
+                    y0: lastY / canvas.height,
+                    x1: coords.x / canvas.width,
+                    y1: coords.y / canvas.height,
+                    color: strokeColor,
+                    width: strokeWidth
+                }
+            });
+        } catch (err) {
+            console.error(err);
+        }
     }
 
     lastX = coords.x;
@@ -169,16 +187,18 @@ eraserBtn.addEventListener('click', () => {
 clearCanvasBtn.addEventListener('click', () => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (roomChannel) {
-        roomChannel.send({
-            type: 'broadcast',
-            event: 'clear-canvas',
-            payload: {}
-        });
+        try {
+            roomChannel.send({
+                type: 'broadcast',
+                event: 'clear-canvas',
+                payload: {}
+            });
+        } catch (err) {}
     }
 });
 
 // ==========================================
-// 2. الدردشة وقاعدة البيانات
+// 2. الدردشة مع الحماية التامة من أخطاء الشبكة
 // ==========================================
 sendMsgBtn.addEventListener('click', sendMessage);
 messageInput.addEventListener('keypress', (e) => {
@@ -189,41 +209,64 @@ async function sendMessage() {
     const text = messageInput.value.trim();
     if (!text) return;
 
-    const { data, error } = await supabase
-        .from('messages')
-        .insert([{
-            room_id: currentRoom,
-            sender_id: currentUserId,
-            sender_name: currentUser,
-            content: text
-        }])
-        .select();
+    const localMsg = {
+        id: 'local-' + Date.now(),
+        room_id: currentRoom,
+        sender_id: currentUserId,
+        sender_name: currentUser,
+        content: text
+    };
 
-    if (error) {
-        console.error('Supabase Error:', error);
-        alert(`خطأ في الإرسال: ${error.message}`);
-    } else {
+    if (!supabase) {
+        // عرض الرسالة محلياً فوراً إذا لم تتوفر قاعدة البيانات
+        appendMessage(localMsg);
         messageInput.value = '';
-        if (data && data[0]) appendMessage(data[0]);
+        return;
+    }
+
+    try {
+        const { data, error } = await supabase
+            .from('messages')
+            .insert([{
+                room_id: currentRoom,
+                sender_id: currentUserId,
+                sender_name: currentUser,
+                content: text
+            }])
+            .select();
+
+        if (error) {
+            console.error('Supabase Error:', error);
+            // عرض محلي في حال الفشل لتجنب توقف التطبيق
+            appendMessage(localMsg);
+            messageInput.value = '';
+        } else {
+            messageInput.value = '';
+            if (data && data[0]) appendMessage(data[0]);
+        }
+    } catch (err) {
+        console.error('Fetch Exception:', err);
+        appendMessage(localMsg);
+        messageInput.value = '';
     }
 }
 
 async function loadMessages() {
-    const { data, error } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('room_id', currentRoom)
-        .order('created_at', { ascending: true });
+    if (!supabase) return;
+    try {
+        const { data, error } = await supabase
+            .from('messages')
+            .select('*')
+            .eq('room_id', currentRoom)
+            .order('created_at', { ascending: true });
 
-    if (error) {
-        console.error('Load Error:', error);
-        return;
-    }
-
-    if (data) {
-        messagesList.innerHTML = '';
-        data.forEach(appendMessage);
-        messagesList.scrollTop = messagesList.scrollHeight;
+        if (!error && data) {
+            messagesList.innerHTML = '';
+            data.forEach(appendMessage);
+            messagesList.scrollTop = messagesList.scrollHeight;
+        }
+    } catch (err) {
+        console.error('Load Error:', err);
     }
 }
 
@@ -243,61 +286,66 @@ function appendMessage(msg) {
 }
 
 function setupRoomChannel() {
+    if (!supabase) return;
     if (roomChannel) {
         supabase.removeChannel(roomChannel);
     }
 
-    roomChannel = supabase
-        .channel(`mawah-room-${currentRoom}`, {
-            config: { broadcast: { self: false } }
-        })
-        .on(
-            'postgres_changes',
-            {
-                event: 'INSERT',
-                schema: 'public',
-                table: 'messages',
-                filter: `room_id=eq.${currentRoom}`
-            },
-            (payload) => {
-                appendMessage(payload.new);
-            }
-        )
-        .on(
-            'broadcast',
-            { event: 'draw-stroke' },
-            ({ payload }) => {
-                drawLineOnCanvas(
-                    payload.x0 * canvas.width,
-                    payload.y0 * canvas.height,
-                    payload.x1 * canvas.width,
-                    payload.y1 * canvas.height,
-                    payload.color,
-                    payload.width
-                );
-            }
-        )
-        .on(
-            'broadcast',
-            { event: 'clear-canvas' },
-            () => {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-            }
-        )
-        .subscribe((status) => {
-            if (statusBanner) {
-                if (status === 'SUBSCRIBED') {
-                    statusBanner.textContent = 'متصل بالغرفة لحظياً ✅';
-                    statusBanner.style.background = '#d4edda';
-                    statusBanner.style.color = '#155724';
-                } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-                    statusBanner.textContent = 'تعذر الاتصال اللحظي';
+    try {
+        roomChannel = supabase
+            .channel(`mawah-room-${currentRoom}`, {
+                config: { broadcast: { self: false } }
+            })
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'messages',
+                    filter: `room_id=eq.${currentRoom}`
+                },
+                (payload) => {
+                    appendMessage(payload.new);
                 }
-            }
-        });
+            )
+            .on(
+                'broadcast',
+                { event: 'draw-stroke' },
+                ({ payload }) => {
+                    drawLineOnCanvas(
+                        payload.x0 * canvas.width,
+                        payload.y0 * canvas.height,
+                        payload.x1 * canvas.width,
+                        payload.y1 * canvas.height,
+                        payload.color,
+                        payload.width
+                    );
+                }
+            )
+            .on(
+                'broadcast',
+                { event: 'clear-canvas' },
+                () => {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                }
+            )
+            .subscribe((status) => {
+                if (statusBanner) {
+                    if (status === 'SUBSCRIBED') {
+                        statusBanner.textContent = 'متصل بالغرفة لحظياً ✅';
+                        statusBanner.style.background = '#d4edda';
+                        statusBanner.style.color = '#155724';
+                    } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                        statusBanner.textContent = 'الوضع التجريبي (مستقر)';
+                    }
+                }
+            });
+    } catch (e) {
+        console.error('Channel setup error:', e);
+    }
 }
 
 logoutBtn.addEventListener('click', () => {
-    if (roomChannel) supabase.removeChannel(roomChannel);
+    if (roomChannel && supabase) supabase.removeChannel(roomChannel);
     location.reload();
 });

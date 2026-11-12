@@ -1,11 +1,11 @@
 import { SUPABASE_CONFIG } from './config.js';
 
-const supabaseLib = window.supabase;
-const supabase = supabaseLib ? supabaseLib.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.publishableKey || SUPABASE_CONFIG.anonKey) : null;
+// تهيئة Supabase بالطريقة المباشرة والآمنة
+const supabase = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.publishableKey);
 
 let currentRoom = null;
 let currentUser = null;
-let currentUserId = null;
+let currentUserId = 'user-' + Math.random().toString(36).substring(2, 9);
 let isEraser = false;
 let roomChannel = null;
 
@@ -16,7 +16,7 @@ const partnerNameInput = document.getElementById('partner-name');
 const roomCodeInput = document.getElementById('room-code');
 const logoutBtn = document.getElementById('logout-btn');
 const roomTitle = document.getElementById('room-title');
-const statusBanner = document.getElementById('connection-status') || document.querySelector('.status-banner');
+const statusBanner = document.getElementById('connection-status');
 
 const canvas = document.getElementById('drawing-canvas');
 const ctx = canvas.getContext('2d');
@@ -58,10 +58,6 @@ joinBtn.addEventListener('click', () => {
     }
 
     currentUser = name;
-    if (!currentUserId) {
-        currentUserId = 'user-' + Math.random().toString(36).substring(2, 9);
-    }
-
     currentRoom = code;
     roomTitle.textContent = `غرفة: ${code}`;
 
@@ -73,17 +69,12 @@ joinBtn.addEventListener('click', () => {
         initDrawing();
     }, 150);
 
-    if (!supabase) {
-        alert('خطأ: مكتبة Supabase لم تُحمّل بعد.');
-        return;
-    }
-
     loadMessages();
     setupRoomChannel();
 });
 
 // ==========================================
-// 1. الرسم والـ Broadcast
+// 1. إعدادات الرسم والتراسل الفوري (Broadcast)
 // ==========================================
 let drawing = false;
 let lastX = 0;
@@ -187,7 +178,7 @@ clearCanvasBtn.addEventListener('click', () => {
 });
 
 // ==========================================
-// 2. الدردشة
+// 2. الدردشة وقاعدة البيانات
 // ==========================================
 sendMsgBtn.addEventListener('click', sendMessage);
 messageInput.addEventListener('keypress', (e) => {
@@ -198,21 +189,19 @@ async function sendMessage() {
     const text = messageInput.value.trim();
     if (!text) return;
 
-    const payloadData = {
-        room_id: currentRoom,
-        sender_id: currentUserId,
-        sender_name: currentUser,
-        content: text
-    };
-
     const { data, error } = await supabase
         .from('messages')
-        .insert([payloadData])
+        .insert([{
+            room_id: currentRoom,
+            sender_id: currentUserId,
+            sender_name: currentUser,
+            content: text
+        }])
         .select();
 
     if (error) {
-        console.error('Supabase Error Details:', error);
-        alert(`خطأ صريح من قاعدة البيانات:\n${error.message} \n(الرمز: ${error.code})`);
+        console.error('Supabase Error:', error);
+        alert(`خطأ في الإرسال: ${error.message}`);
     } else {
         messageInput.value = '';
         if (data && data[0]) appendMessage(data[0]);

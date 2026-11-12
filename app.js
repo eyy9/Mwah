@@ -13,7 +13,7 @@ let currentRoom = null;
 let currentUser = null;
 let currentUserId = 'user-' + Math.random().toString(36).substring(2, 9);
 let isEraser = false;
-let roomChannel = null;
+let messagePollInterval = null;
 
 const authScreen = document.getElementById('auth-screen');
 const mainScreen = document.getElementById('main-screen');
@@ -76,15 +76,20 @@ joinBtn.addEventListener('click', () => {
     }, 150);
 
     if (supabase) {
+        if (statusBanner) {
+            statusBanner.textContent = 'متصل بنجاح ✅';
+            statusBanner.style.background = '#d4edda';
+            statusBanner.style.color = '#155724';
+        }
         loadMessages();
-        setupRoomChannel();
-        // تفعيل تحديث دوري كل ثانيتين لجلب رسائل الطرف الآخر حتى لو فشل الـ Realtime
-        setInterval(loadMessages, 2000);
+        // تحديث وتناغم فوري بين الطرفين كل ثانية ونصف
+        if (messagePollInterval) clearInterval(messagePollInterval);
+        messagePollInterval = setInterval(loadMessages, 1500);
     }
 });
 
 // ==========================================
-// 1. الرسم والتفاعل الفوري
+// 1. الرسم والتفاعل
 // ==========================================
 let drawing = false;
 let lastX = 0;
@@ -136,24 +141,6 @@ function draw(e) {
     const strokeWidth = brushSize.value;
 
     drawLineOnCanvas(lastX, lastY, coords.x, coords.y, strokeColor, strokeWidth);
-
-    if (roomChannel) {
-        try {
-            roomChannel.send({
-                type: 'broadcast',
-                event: 'draw-stroke',
-                payload: {
-                    x0: lastX / canvas.width,
-                    y0: lastY / canvas.height,
-                    x1: coords.x / canvas.width,
-                    y1: coords.y / canvas.height,
-                    color: strokeColor,
-                    width: strokeWidth
-                }
-            });
-        } catch (err) {}
-    }
-
     lastX = coords.x;
     lastY = coords.y;
 }
@@ -180,19 +167,10 @@ eraserBtn.addEventListener('click', () => {
 
 clearCanvasBtn.addEventListener('click', () => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if (roomChannel) {
-        try {
-            roomChannel.send({
-                type: 'broadcast',
-                event: 'clear-canvas',
-                payload: {}
-            });
-        } catch (err) {}
-    }
 });
 
 // ==========================================
-// 2. الدردشة والإرسال الفعلي لقاعدة البيانات
+// 2. الدردشة والإرسال المباشر للطرفين
 // ==========================================
 sendMsgBtn.addEventListener('click', sendMessage);
 messageInput.addEventListener('keypress', (e) => {
@@ -201,11 +179,9 @@ messageInput.addEventListener('keypress', (e) => {
 
 async function sendMessage() {
     const text = messageInput.value.trim();
-    if (!text) return;
+    if (!text || !supabase) return;
 
     messageInput.value = '';
-
-    if (!supabase) return;
 
     try {
         const { error } = await supabase
@@ -219,16 +195,17 @@ async function sendMessage() {
 
         if (error) {
             console.error('Insert error:', error);
+            alert('حدث خطأ في إرسال الرسالة لقاعدة البيانات');
         } else {
-            loadMessages(); // تحديث القائمة فوراً بعد الإرسال
+            loadMessages(); // جلب الرسائل فوراً لتظهر عند الطرفين
         }
     } catch (err) {
-        console.error('Send error:', err);
+        console.error('Send catch error:', err);
     }
 }
 
 async function loadMessages() {
-    if (!supabase) return;
+    if (!supabase || !currentRoom) return;
     try {
         const { data, error } = await supabase
             .from('messages')
@@ -240,7 +217,9 @@ async function loadMessages() {
             messagesList.innerHTML = '';
             data.forEach(appendMessage);
         }
-    } catch (err) {}
+    } catch (err) {
+        console.error('Load error:', err);
+    }
 }
 
 function appendMessage(msg) {
@@ -258,61 +237,7 @@ function appendMessage(msg) {
     messagesList.scrollTop = messagesList.scrollHeight;
 }
 
-function setupRoomChannel() {
-    if (!supabase) return;
-    if (roomChannel) {
-        supabase.removeChannel(roomChannel);
-    }
-
-    try {
-        roomChannel = supabase
-            .channel(`mawah-room-${currentRoom}`)
-            .on(
-                'postgres_changes',
-                {
-                    event: 'INSERT',
-                    schema: 'public',
-                    table: 'messages',
-                    filter: `room_id=eq.${currentRoom}`
-                },
-                (payload) => {
-                    appendMessage(payload.new);
-                }
-            )
-            .on(
-                'broadcast',
-                { event: 'draw-stroke' },
-                ({ payload }) => {
-                    drawLineOnCanvas(
-                        payload.x0 * canvas.width,
-                        payload.y0 * canvas.height,
-                        payload.x1 * canvas.width,
-                        payload.y1 * canvas.height,
-                        payload.color,
-                        payload.width
-                    );
-                }
-            )
-            .on(
-                'broadcast',
-                { event: 'clear-canvas' },
-                () => {
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                }
-            )
-            .subscribe((status) => {
-                if (statusBanner) {
-                    if (status === 'SUBSCRIBED') {
-                        statusBanner.textContent = 'متصل بالغرفة لحظياً ✅';
-                        statusBanner.style.background = '#d4edda';
-                        statusBanner.style.color = '#155724';
-                    }
-                }
-            });
-    } catch (e) {}
-}
-
 logoutBtn.addEventListener('click', () => {
-    if (roomChannel && supabase) supabase.removeChannel(roomChannel);
+    if (messagePollInterval) clearInterval(messagePollInterval);
     location.reload();
 });

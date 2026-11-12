@@ -106,14 +106,21 @@ async function sendMessage() {
     const text = messageInput.value.trim();
     if (!text) return;
 
-    await supabase.from('messages').insert([
+    const { error } = await supabase.from('messages').insert([
         { room_code: currentRoom, sender: currentUser, content: text }
     ]);
-    messageInput.value = '';
+
+    if (error) {
+        console.error(error);
+        alert('فشل إرسال الرسالة، تأكد من الاتصال');
+    } else {
+        messageInput.value = '';
+        loadMessages(); // تحديث فوري للقائمة بعد الإرسال
+    }
 }
 
 async function loadMessages() {
-    const { data } = await supabase
+    const { data, error } = await supabase
         .from('messages')
         .select('*')
         .eq('room_code', currentRoom)
@@ -127,7 +134,14 @@ async function loadMessages() {
 }
 
 function appendMessage(msg) {
+    // منع تكرار عرض نفس الرسالة إذا كانت موجودة مسبقاً
+    const existingMessages = messagesList.children;
+    for (let child of existingMessages) {
+        if (child.dataset.id === String(msg.id)) return;
+    }
+
     const div = document.createElement('div');
+    div.dataset.id = msg.id;
     div.className = `message ${msg.sender === currentUser ? 'sent' : 'received'}`;
     div.textContent = `${msg.sender}: ${msg.content}`;
     messagesList.appendChild(div);
@@ -135,17 +149,24 @@ function appendMessage(msg) {
 }
 
 function subscribeToRealtime() {
+    // الاستماع الفوري لكل الرسائل الجديدة وجلبها
     supabase
-        .channel('room-sync-' + currentRoom)
-        .on('postgres_changes', { 
-            event: 'INSERT', 
-            schema: 'public', 
-            table: 'messages'
-        }, payload => {
-            // التحقق من أن الرسالة تخص نفس الغرفة الحالية
-            if (payload.new && payload.new.room_code === currentRoom) {
-                appendMessage(payload.new);
+        .channel('custom-all-channel')
+        .on(
+            'postgres_changes',
+            { event: 'INSERT', schema: 'public', table: 'messages' },
+            (payload) => {
+                if (payload.new && payload.new.room_code === currentRoom) {
+                    appendMessage(payload.new);
+                }
             }
-        })
+        )
         .subscribe();
+        
+    // تحديث احتياطي كل ثانيتين لضمان ظهور الرسائل قطعيّاً بين الهاتفين
+    setInterval(loadMessages, 2000);
 }
+
+logoutBtn.addEventListener('click', () => {
+    location.reload();
+});

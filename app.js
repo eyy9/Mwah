@@ -5,7 +5,7 @@ const supabase = supabaseLib ? supabaseLib.createClient(SUPABASE_CONFIG.url, SUP
 
 let currentRoom = null;
 let currentUser = null;
-let currentUserId = null; // مُعرّف فريد للمستخدم لتوافق جدول sender_id
+let currentUserId = null;
 let isEraser = false;
 let roomChannel = null;
 
@@ -58,12 +58,8 @@ joinBtn.addEventListener('click', () => {
     }
 
     currentUser = name;
-    // إنشاؤه مرة واحدة للمستخدم الحالي لتعبئة sender_id
     if (!currentUserId) {
-        currentUserId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-            var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
-            return v.toString(16);
-        });
+        currentUserId = 'user-' + Math.random().toString(36).substring(2, 9);
     }
 
     currentRoom = code;
@@ -78,7 +74,7 @@ joinBtn.addEventListener('click', () => {
     }, 150);
 
     if (!supabase) {
-        alert('خطأ: مكتبة Supabase لم تُحمّل بعد، حدّث الصفحة.');
+        alert('خطأ: مكتبة Supabase لم تُحمّل بعد.');
         return;
     }
 
@@ -87,7 +83,7 @@ joinBtn.addEventListener('click', () => {
 });
 
 // ==========================================
-// 1. إعدادات الرسم المحلي والتشاركي (Broadcast)
+// 1. الرسم والـ Broadcast
 // ==========================================
 let drawing = false;
 let lastX = 0;
@@ -191,7 +187,7 @@ clearCanvasBtn.addEventListener('click', () => {
 });
 
 // ==========================================
-// 2. الدردشة والمزامنة الفورية (تطابق الأعمِدة الستة)
+// 2. الدردشة
 // ==========================================
 sendMsgBtn.addEventListener('click', sendMessage);
 messageInput.addEventListener('keypress', (e) => {
@@ -202,20 +198,21 @@ async function sendMessage() {
     const text = messageInput.value.trim();
     if (!text) return;
 
-    // إرسال القيم متوافقة مع الأعمدة الستة بالكامل
+    const payloadData = {
+        room_id: currentRoom,
+        sender_id: currentUserId,
+        sender_name: currentUser,
+        content: text
+    };
+
     const { data, error } = await supabase
         .from('messages')
-        .insert([{
-            room_id: currentRoom,
-            sender_id: currentUserId,
-            sender_name: currentUser,
-            content: text
-        }])
+        .insert([payloadData])
         .select();
 
     if (error) {
-        console.error('Supabase Insert Error:', error);
-        alert(`خطأ في الإرسال: ${error.message}`);
+        console.error('Supabase Error Details:', error);
+        alert(`خطأ صريح من قاعدة البيانات:\n${error.message} \n(الرمز: ${error.code})`);
     } else {
         messageInput.value = '';
         if (data && data[0]) appendMessage(data[0]);
@@ -230,7 +227,7 @@ async function loadMessages() {
         .order('created_at', { ascending: true });
 
     if (error) {
-        console.error('Supabase Select Error:', error);
+        console.error('Load Error:', error);
         return;
     }
 
@@ -305,7 +302,7 @@ function setupRoomChannel() {
                     statusBanner.style.background = '#d4edda';
                     statusBanner.style.color = '#155724';
                 } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-                    statusBanner.textContent = 'تعذر الاتصال اللحظي، تحقق من الإنترنت';
+                    statusBanner.textContent = 'تعذر الاتصال اللحظي';
                 }
             }
         });

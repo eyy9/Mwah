@@ -157,3 +157,17 @@ function subscribeToRealtime() {
 logoutBtn.addEventListener('click', () => {
     location.reload();
 });
+// التحديث اللحظي (Realtime) المباشر
+function subscribeToRealtime() {
+    supabase
+        .channel('public:messages')
+        .on('postgres_changes', { 
+            event: 'INSERT', 
+            schema: 'public', 
+            table: 'messages', 
+            filter: `room_code=eq.${currentRoom}` 
+        }, payload => {
+            appendMessage(payload.new);
+        })
+        .subscribe();
+}

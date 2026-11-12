@@ -78,17 +78,13 @@ joinBtn.addEventListener('click', () => {
     if (supabase) {
         loadMessages();
         setupRoomChannel();
-    } else {
-        if (statusBanner) {
-            statusBanner.textContent = 'الوضع المحلي (يعمل بدون انترنت) ⚡';
-            statusBanner.style.background = '#fff3cd';
-            statusBanner.style.color = '#856404';
-        }
+        // تفعيل تحديث دوري كل ثانيتين لجلب رسائل الطرف الآخر حتى لو فشل الـ Realtime
+        setInterval(loadMessages, 2000);
     }
 });
 
 // ==========================================
-// 1. إعدادات الرسم والـ Broadcast
+// 1. الرسم والتفاعل الفوري
 // ==========================================
 let drawing = false;
 let lastX = 0;
@@ -155,9 +151,7 @@ function draw(e) {
                     width: strokeWidth
                 }
             });
-        } catch (err) {
-            console.error(err);
-        }
+        } catch (err) {}
     }
 
     lastX = coords.x;
@@ -198,7 +192,7 @@ clearCanvasBtn.addEventListener('click', () => {
 });
 
 // ==========================================
-// 2. الدردشة مع الحماية التامة من أخطاء الشبكة
+// 2. الدردشة والإرسال الفعلي لقاعدة البيانات
 // ==========================================
 sendMsgBtn.addEventListener('click', sendMessage);
 messageInput.addEventListener('keypress', (e) => {
@@ -209,45 +203,27 @@ async function sendMessage() {
     const text = messageInput.value.trim();
     if (!text) return;
 
-    const localMsg = {
-        id: 'local-' + Date.now(),
-        room_id: currentRoom,
-        sender_id: currentUserId,
-        sender_name: currentUser,
-        content: text
-    };
+    messageInput.value = '';
 
-    if (!supabase) {
-        // عرض الرسالة محلياً فوراً إذا لم تتوفر قاعدة البيانات
-        appendMessage(localMsg);
-        messageInput.value = '';
-        return;
-    }
+    if (!supabase) return;
 
     try {
-        const { data, error } = await supabase
+        const { error } = await supabase
             .from('messages')
             .insert([{
                 room_id: currentRoom,
                 sender_id: currentUserId,
                 sender_name: currentUser,
                 content: text
-            }])
-            .select();
+            }]);
 
         if (error) {
-            console.error('Supabase Error:', error);
-            // عرض محلي في حال الفشل لتجنب توقف التطبيق
-            appendMessage(localMsg);
-            messageInput.value = '';
+            console.error('Insert error:', error);
         } else {
-            messageInput.value = '';
-            if (data && data[0]) appendMessage(data[0]);
+            loadMessages(); // تحديث القائمة فوراً بعد الإرسال
         }
     } catch (err) {
-        console.error('Fetch Exception:', err);
-        appendMessage(localMsg);
-        messageInput.value = '';
+        console.error('Send error:', err);
     }
 }
 
@@ -263,11 +239,8 @@ async function loadMessages() {
         if (!error && data) {
             messagesList.innerHTML = '';
             data.forEach(appendMessage);
-            messagesList.scrollTop = messagesList.scrollHeight;
         }
-    } catch (err) {
-        console.error('Load Error:', err);
-    }
+    } catch (err) {}
 }
 
 function appendMessage(msg) {
@@ -293,9 +266,7 @@ function setupRoomChannel() {
 
     try {
         roomChannel = supabase
-            .channel(`mawah-room-${currentRoom}`, {
-                config: { broadcast: { self: false } }
-            })
+            .channel(`mawah-room-${currentRoom}`)
             .on(
                 'postgres_changes',
                 {
@@ -335,14 +306,10 @@ function setupRoomChannel() {
                         statusBanner.textContent = 'متصل بالغرفة لحظياً ✅';
                         statusBanner.style.background = '#d4edda';
                         statusBanner.style.color = '#155724';
-                    } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-                        statusBanner.textContent = 'الوضع التجريبي (مستقر)';
                     }
                 }
             });
-    } catch (e) {
-        console.error('Channel setup error:', e);
-    }
+    } catch (e) {}
 }
 
 logoutBtn.addEventListener('click', () => {

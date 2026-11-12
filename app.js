@@ -6,16 +6,15 @@ let currentRoom = null;
 let currentUser = null;
 let isEraser = false;
 
-// عناصر الشاشة
 const authScreen = document.getElementById('auth-screen');
 const mainScreen = document.getElementById('main-screen');
 const joinBtn = document.getElementById('join-btn');
+const joinCodeBtn = document.getElementById('join-code-btn');
 const partnerNameInput = document.getElementById('partner-name');
 const roomCodeInput = document.getElementById('room-code');
 const logoutBtn = document.getElementById('logout-btn');
 const roomTitle = document.getElementById('room-title');
 
-// الكانفاس والرسومات
 const canvas = document.getElementById('drawing-canvas');
 const ctx = canvas.getContext('2d');
 const colorPicker = document.getElementById('color-picker');
@@ -23,12 +22,10 @@ const brushSize = document.getElementById('brush-size');
 const eraserBtn = document.getElementById('eraser-btn');
 const clearCanvasBtn = document.getElementById('clear-canvas-btn');
 
-// الدردشة
 const messageInput = document.getElementById('message-input');
 const sendMsgBtn = document.getElementById('send-msg-btn');
 const messagesList = document.getElementById('messages-list');
 
-// ضبط مقاسات الكانفاس بدقة
 function resizeCanvas() {
     const rect = canvas.parentElement.getBoundingClientRect();
     canvas.width = rect.width;
@@ -36,8 +33,7 @@ function resizeCanvas() {
 }
 window.addEventListener('resize', resizeCanvas);
 
-// تسجيل الدخول والانضمام للغرفة مباشرة
-joinBtn.addEventListener('click', async () => {
+function handleJoin() {
     const name = partnerNameInput.value.trim();
     const code = roomCodeInput.value.trim();
 
@@ -57,14 +53,15 @@ joinBtn.addEventListener('click', async () => {
     initDrawing();
     loadMessages();
     subscribeToRealtime();
-});
+}
 
-// وظائف الرسم
+joinBtn.addEventListener('click', handleJoin);
+if (joinCodeBtn) joinCodeBtn.addEventListener('click', handleJoin);
+
 let drawing = false;
 
 function initDrawing() {
     resizeCanvas();
-
     canvas.addEventListener('mousedown', startDrawing);
     canvas.addEventListener('mousemove', draw);
     canvas.addEventListener('mouseup', stopDrawing);
@@ -87,13 +84,7 @@ function draw(e) {
     const rect = canvas.getBoundingClientRect();
     ctx.lineWidth = brushSize.value;
     ctx.lineCap = 'round';
-    
-    if (isEraser) {
-        ctx.strokeStyle = '#ffffff';
-    } else {
-        ctx.strokeStyle = colorPicker.value;
-    }
-
+    ctx.strokeStyle = isEraser ? '#ffffff' : colorPicker.value;
     ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
     ctx.stroke();
 }
@@ -111,7 +102,6 @@ clearCanvasBtn.addEventListener('click', () => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 });
 
-// إرسال الرسائل
 sendMsgBtn.addEventListener('click', sendMessage);
 messageInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') sendMessage();
@@ -155,7 +145,6 @@ function appendMessage(msg) {
     messagesList.scrollTop = messagesList.scrollHeight;
 }
 
-// التحديث اللحظي (Realtime)
 function subscribeToRealtime() {
     supabase
         .channel('room-channel')
@@ -165,7 +154,6 @@ function subscribeToRealtime() {
         .subscribe();
 }
 
-// تسجيل الخروج
 logoutBtn.addEventListener('click', () => {
     location.reload();
 });

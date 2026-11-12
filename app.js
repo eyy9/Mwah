@@ -1,10 +1,12 @@
-import { SUPABASE_CONFIG } from './config.js';
-
-const supabase = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.publishableKey);
+import { supabase } from './supabase.js';
 
 let currentRoom = null;
 let currentUser = null;
 let isEraser = false;
+let drawing = false;
+let drawingInitialized = false;
+let messageChannel = null;
+const messagesById = new Map();
 
 const authScreen = document.getElementById('auth-screen');
 const mainScreen = document.getElementById('main-screen');
@@ -13,6 +15,8 @@ const partnerNameInput = document.getElementById('partner-name');
 const roomCodeInput = document.getElementById('room-code');
 const logoutBtn = document.getElementById('logout-btn');
 const roomTitle = document.getElementById('room-title');
+const setupError = document.getElementById('setup-error');
+const realtimeStatus = document.getElementById('realtime-status');
 
 const canvas = document.getElementById('drawing-canvas');
 const ctx = canvas.getContext('2d');
@@ -25,13 +29,42 @@ const messageInput = document.getElementById('message-input');
 const sendMsgBtn = document.getElementById('send-msg-btn');
 const messagesList = document.getElementById('messages-list');
 
-function resizeCanvas() {
-    const rect = canvas.parentElement.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
+function setRealtimeStatus(message, state) {
+    if (!realtimeStatus) return;
+    realtimeStatus.textContent = message;
+    realtimeStatus.dataset.state = state;
 }
 
-joinBtn.addEventListener('click', () => {
+if (!supabase) {
+    if (setupError) {
+        setupError.textContent = 'تعذر الاتصال: تحقق من إعدادات Supabase في config.js.';
+        setupError.hidden = false;
+    }
+    joinBtn.disabled = true;
+}
+
+function resizeCanvas() {
+    const rect = canvas.parentElement.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+
+    const width = Math.round(rect.width);
+    const height = Math.round(rect.height);
+    if (canvas.width === width && canvas.height === height) return;
+
+    const previousCanvas = document.createElement('canvas');
+    const hasPreviousDrawing = canvas.width > 0 && canvas.height > 0;
+    if (hasPreviousDrawing) {
+        previousCanvas.width = canvas.width;
+        previousCanvas.height = canvas.height;
+        previousCanvas.getContext('2d').drawImage(canvas, 0, 0);
+    }
+
+    canvas.width = width;
+    canvas.height = height;
+    if (hasPreviousDrawing) ctx.drawImage(previousCanvas, 0, 0, width, height);
+}
+
+async function joinRoom() {
     const name = partnerNameInput.value.trim();
     const code = roomCodeInput.value.trim();
 
@@ -39,48 +72,60 @@ joinBtn.addEventListener('click', () => {
         alert('الرجاء كتابة الاسم ورمز الغرفة ❤️');
         return;
     }
+    if (!supabase) return;
 
+    joinBtn.disabled = true;
     currentUser = name;
     currentRoom = code;
-    roomTitle.textContent = `غرفة: ${code}`;
+    roomTitle.textContent = 'غرفة: ' + code;
+    messagesById.clear();
+    messagesList.replaceChildren();
 
     authScreen.classList.remove('active');
     mainScreen.classList.add('active');
+    setRealtimeStatus('جارٍ الاتصال بالغرفة…', 'connecting');
 
-    setTimeout(resizeCanvas, 100);
+    resizeCanvas();
     initDrawing();
-    loadMessages();
     subscribeToRealtime();
-});
-
-let drawing = false;
+    await loadMessages();
+}
 
 function initDrawing() {
     resizeCanvas();
-    canvas.addEventListener('mousedown', startDrawing);
-    canvas.addEventListener('mousemove', draw);
-    canvas.addEventListener('mouseup', stopDrawing);
-    canvas.addEventListener('mouseleave', stopDrawing);
+    if (drawingInitialized) return;
+    drawingInitialized = true;
 
-    canvas.addEventListener('touchstart', (e) => { e.preventDefault(); startDrawing(e.touches[0]); });
-    canvas.addEventListener('touchmove', (e) => { e.preventDefault(); draw(e.touches[0]); });
-    canvas.addEventListener('touchend', stopDrawing);
+    canvas.style.touchAction = 'none';
+    canvas.addEventListener('pointerdown', startDrawing, { passive: false });
+    canvas.addEventListener('pointermove', draw, { passive: false });
+    canvas.addEventListener('pointerup', stopDrawing);
+    canvas.addEventListener('pointercancel', stopDrawing);
+    canvas.addEventListener('lostpointercapture', stopDrawing);
+    window.addEventListener('resize', resizeCanvas, { passive: true });
 }
 
-function startDrawing(e) {
+function startDrawing(event) {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    if (event.cancelable) event.preventDefault();
     drawing = true;
+    if (canvas.setPointerCapture && event.pointerId !== undefined) {
+        canvas.setPointerCapture(event.pointerId);
+    }
     ctx.beginPath();
     const rect = canvas.getBoundingClientRect();
-    ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+    ctx.moveTo(event.clientX - rect.left, event.clientY - rect.top);
 }
 
-function draw(e) {
+function draw(event) {
     if (!drawing) return;
+    if (event.cancelable) event.preventDefault();
     const rect = canvas.getBoundingClientRect();
-    ctx.lineWidth = brushSize.value;
+    ctx.lineWidth = Number(brushSize.value);
     ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
     ctx.strokeStyle = isEraser ? '#ffffff' : colorPicker.value;
-    ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+    ctx.lineTo(event.clientX - rect.left, event.clientY - rect.top);
     ctx.stroke();
 }
 
@@ -90,6 +135,7 @@ function stopDrawing() {
 
 eraserBtn.addEventListener('click', () => {
     isEraser = !isEraser;
+    eraserBtn.setAttribute('aria-pressed', String(isEraser));
     eraserBtn.style.background = isEraser ? '#ffb3c6' : 'white';
 });
 
@@ -98,75 +144,148 @@ clearCanvasBtn.addEventListener('click', () => {
 });
 
 sendMsgBtn.addEventListener('click', sendMessage);
-messageInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') sendMessage();
+messageInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && !event.isComposing) {
+        event.preventDefault();
+        sendMessage();
+    }
 });
 
 async function sendMessage() {
     const text = messageInput.value.trim();
-    if (!text) return;
+    if (!text || !currentRoom || !supabase || sendMsgBtn.disabled) return;
 
-    const { error } = await supabase.from('messages').insert([
-        { room_code: currentRoom, sender: currentUser, content: text }
-    ]);
+    sendMsgBtn.disabled = true;
+    try {
+        const { data, error } = await supabase
+            .from('messages')
+            .insert({ room_code: currentRoom, sender: currentUser, content: text })
+            .select('*')
+            .single();
 
-    if (error) {
-        console.error(error);
-        alert('فشل إرسال الرسالة، تأكد من الاتصال');
-    } else {
+        if (error) throw error;
         messageInput.value = '';
-        loadMessages(); // تحديث فوري للقائمة بعد الإرسال
+        if (data) appendMessage(data);
+        else await loadMessages();
+    } catch (error) {
+        console.error('[Mawah] Failed to send message:', error);
+        alert('فشل إرسال الرسالة، تحقق من الاتصال والصلاحيات.');
+    } finally {
+        sendMsgBtn.disabled = false;
+        messageInput.focus();
     }
 }
 
 async function loadMessages() {
+    if (!supabase || !currentRoom) return;
+    const roomAtRequest = currentRoom;
     const { data, error } = await supabase
         .from('messages')
         .select('*')
-        .eq('room_code', currentRoom)
+        .eq('room_code', roomAtRequest)
         .order('created_at', { ascending: true });
 
-    if (data) {
-        messagesList.innerHTML = '';
-        data.forEach(appendMessage);
-        messagesList.scrollTop = messagesList.scrollHeight;
+    if (roomAtRequest !== currentRoom) return;
+    if (error) {
+        console.error('[Mawah] Failed to load messages:', error);
+        return;
     }
+    mergeMessages(data || []);
 }
 
-function appendMessage(msg) {
-    // منع تكرار عرض نفس الرسالة إذا كانت موجودة مسبقاً
-    const existingMessages = messagesList.children;
-    for (let child of existingMessages) {
-        if (child.dataset.id === String(msg.id)) return;
+function mergeMessages(rows) {
+    for (const message of rows) {
+        if (message && message.id !== undefined && message.id !== null) {
+            messagesById.set(String(message.id), message);
+        }
+    }
+    renderMessages();
+}
+
+function appendMessage(message) {
+    if (!message || message.id === undefined || message.id === null) return;
+    if (messagesById.has(String(message.id))) return;
+    messagesById.set(String(message.id), message);
+    renderMessages();
+}
+
+function renderMessages() {
+    const keepAtBottom = messagesList.scrollHeight - messagesList.scrollTop - messagesList.clientHeight < 48;
+    const sortedMessages = Array.from(messagesById.values()).sort((a, b) => {
+        const timeDiff = new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+        return timeDiff || String(a.id).localeCompare(String(b.id));
+    });
+    const fragment = document.createDocumentFragment();
+
+    for (const message of sortedMessages) {
+        const item = document.createElement('div');
+        item.dataset.id = String(message.id);
+        item.className = 'message ' + (message.sender === currentUser ? 'sent' : 'received');
+        item.textContent = String(message.sender || 'مجهول') + ': ' + String(message.content || '');
+        fragment.appendChild(item);
     }
 
-    const div = document.createElement('div');
-    div.dataset.id = msg.id;
-    div.className = `message ${msg.sender === currentUser ? 'sent' : 'received'}`;
-    div.textContent = `${msg.sender}: ${msg.content}`;
-    messagesList.appendChild(div);
-    messagesList.scrollTop = messagesList.scrollHeight;
+    messagesList.replaceChildren(fragment);
+    if (keepAtBottom) messagesList.scrollTop = messagesList.scrollHeight;
 }
 
 function subscribeToRealtime() {
-    // الاستماع الفوري لكل الرسائل الجديدة وجلبها
-    supabase
-        .channel('custom-all-channel')
+    if (!supabase || !currentRoom) return;
+    if (messageChannel) {
+        const previousChannel = messageChannel;
+        messageChannel = null;
+        void supabase.removeChannel(previousChannel);
+    }
+
+    const roomAtSubscribe = currentRoom;
+    const channel = supabase
+        .channel('mawah-messages-' + encodeURIComponent(roomAtSubscribe))
         .on(
             'postgres_changes',
-            { event: 'INSERT', schema: 'public', table: 'messages' },
+            {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'messages',
+                filter: 'room_code=eq.' + roomAtSubscribe
+            },
             (payload) => {
                 if (payload.new && payload.new.room_code === currentRoom) {
                     appendMessage(payload.new);
                 }
             }
-        )
-        .subscribe();
-        
-    // تحديث احتياطي كل ثانيتين لضمان ظهور الرسائل قطعيّاً بين الهاتفين
-    setInterval(loadMessages, 2000);
+        );
+
+    messageChannel = channel;
+    channel.subscribe((status, error) => {
+        if (messageChannel !== channel) return;
+        if (status === 'SUBSCRIBED') {
+            setRealtimeStatus('متصل — الرسائل تصل فوراً', 'connected');
+            void loadMessages();
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.error('[Mawah Realtime] Subscription failed:', error || status);
+            setRealtimeStatus('تعذر الاتصال اللحظي؛ تحقق من إعدادات Realtime في Supabase.', 'error');
+        } else if (status === 'CLOSED') {
+            messageChannel = null;
+            setRealtimeStatus('انقطع اتصال الغرفة.', 'offline');
+        }
+    });
 }
 
+joinBtn.addEventListener('click', joinRoom);
+
+window.addEventListener('online', () => {
+    if (currentRoom && !messageChannel) subscribeToRealtime();
+});
+window.addEventListener('offline', () => {
+    setRealtimeStatus('انقطع اتصال الإنترنت.', 'offline');
+});
+
 logoutBtn.addEventListener('click', () => {
-    location.reload();
+    if (messageChannel && supabase) void supabase.removeChannel(messageChannel);
+    messageChannel = null;
+    currentRoom = null;
+    messagesById.clear();
+    mainScreen.classList.remove('active');
+    authScreen.classList.add('active');
+    joinBtn.disabled = !supabase;
 });

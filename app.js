@@ -5,6 +5,7 @@ const supabase = supabaseLib ? supabaseLib.createClient(SUPABASE_CONFIG.url, SUP
 
 let currentRoom = null;
 let currentUser = null;
+let currentUserId = null; // مُعرّف فريد للمستخدم لتوافق جدول sender_id
 let isEraser = false;
 let roomChannel = null;
 
@@ -57,6 +58,14 @@ joinBtn.addEventListener('click', () => {
     }
 
     currentUser = name;
+    // إنشاؤه مرة واحدة للمستخدم الحالي لتعبئة sender_id
+    if (!currentUserId) {
+        currentUserId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
+
     currentRoom = code;
     roomTitle.textContent = `غرفة: ${code}`;
 
@@ -78,7 +87,7 @@ joinBtn.addEventListener('click', () => {
 });
 
 // ==========================================
-// 1. إعدادات الرسم المحلي والتشاركي
+// 1. إعدادات الرسم المحلي والتشاركي (Broadcast)
 // ==========================================
 let drawing = false;
 let lastX = 0;
@@ -182,7 +191,7 @@ clearCanvasBtn.addEventListener('click', () => {
 });
 
 // ==========================================
-// 2. الدردشة والمزامنة الفورية (مطابقة لأسماء الأعمدة الجديدة)
+// 2. الدردشة والمزامنة الفورية (تطابق الأعمِدة الستة)
 // ==========================================
 sendMsgBtn.addEventListener('click', sendMessage);
 messageInput.addEventListener('keypress', (e) => {
@@ -193,10 +202,15 @@ async function sendMessage() {
     const text = messageInput.value.trim();
     if (!text) return;
 
-    // تم تعديل الأسماء لتطابق جدولك: room_id و sender_name
+    // إرسال القيم متوافقة مع الأعمدة الستة بالكامل
     const { data, error } = await supabase
         .from('messages')
-        .insert([{ room_id: currentRoom, sender_name: currentUser, content: text }])
+        .insert([{
+            room_id: currentRoom,
+            sender_id: currentUserId,
+            sender_name: currentUser,
+            content: text
+        }])
         .select();
 
     if (error) {
@@ -235,8 +249,7 @@ function appendMessage(msg) {
 
     const div = document.createElement('div');
     div.dataset.id = msg.id || Date.now();
-    // استخدام sender_name بدلاً من sender
-    const senderName = msg.sender_name || msg.sender || 'مجهول';
+    const senderName = msg.sender_name || 'مجهول';
     div.className = `message ${senderName === currentUser ? 'sent' : 'received'}`;
     div.textContent = `${senderName}: ${msg.content}`;
     messagesList.appendChild(div);

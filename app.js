@@ -1,12 +1,11 @@
-import { supabase } from './supabase.js';
+import { SUPABASE_CONFIG } from './config.js';
+
+const supabase = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.publishableKey);
 
 let currentRoom = null;
 let currentUser = null;
 let isEraser = false;
-let drawing = false;
-let drawingInitialized = false;
-let messageChannel = null;
-const messagesById = new Map();
+let roomChannel = null;
 
 const authScreen = document.getElementById('auth-screen');
 const mainScreen = document.getElementById('main-screen');
@@ -15,8 +14,6 @@ const partnerNameInput = document.getElementById('partner-name');
 const roomCodeInput = document.getElementById('room-code');
 const logoutBtn = document.getElementById('logout-btn');
 const roomTitle = document.getElementById('room-title');
-const setupError = document.getElementById('setup-error');
-const realtimeStatus = document.getElementById('realtime-status');
 
 const canvas = document.getElementById('drawing-canvas');
 const ctx = canvas.getContext('2d');
@@ -29,42 +26,18 @@ const messageInput = document.getElementById('message-input');
 const sendMsgBtn = document.getElementById('send-msg-btn');
 const messagesList = document.getElementById('messages-list');
 
-function setRealtimeStatus(message, state) {
-    if (!realtimeStatus) return;
-    realtimeStatus.textContent = message;
-    realtimeStatus.dataset.state = state;
-}
-
-if (!supabase) {
-    if (setupError) {
-        setupError.textContent = 'تعذر الاتصال: تحقق من إعدادات Supabase في config.js.';
-        setupError.hidden = false;
-    }
-    joinBtn.disabled = true;
-}
-
 function resizeCanvas() {
     const rect = canvas.parentElement.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
-
-    const width = Math.round(rect.width);
-    const height = Math.round(rect.height);
-    if (canvas.width === width && canvas.height === height) return;
-
-    const previousCanvas = document.createElement('canvas');
-    const hasPreviousDrawing = canvas.width > 0 && canvas.height > 0;
-    if (hasPreviousDrawing) {
-        previousCanvas.width = canvas.width;
-        previousCanvas.height = canvas.height;
-        previousCanvas.getContext('2d').drawImage(canvas, 0, 0);
-    }
-
-    canvas.width = width;
-    canvas.height = height;
-    if (hasPreviousDrawing) ctx.drawImage(previousCanvas, 0, 0, width, height);
+    // حفظ الرسم الحالي قبل تغيير الحجم
+    const tempImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    ctx.putImageData(tempImage, 0, 0);
 }
 
-async function joinRoom() {
+window.addEventListener('resize', resizeCanvas);
+
+joinBtn.addEventListener('click', () => {
     const name = partnerNameInput.value.trim();
     const code = roomCodeInput.value.trim();
 
@@ -72,220 +45,226 @@ async function joinRoom() {
         alert('الرجاء كتابة الاسم ورمز الغرفة ❤️');
         return;
     }
-    if (!supabase) return;
 
-    joinBtn.disabled = true;
     currentUser = name;
     currentRoom = code;
-    roomTitle.textContent = 'غرفة: ' + code;
-    messagesById.clear();
-    messagesList.replaceChildren();
+    roomTitle.textContent = `غرفة: ${code}`;
 
     authScreen.classList.remove('active');
     mainScreen.classList.add('active');
-    setRealtimeStatus('جارٍ الاتصال بالغرفة…', 'connecting');
 
-    resizeCanvas();
+    setTimeout(resizeCanvas, 100);
     initDrawing();
-    subscribeToRealtime();
-    await loadMessages();
-}
+    loadMessages();
+    setupRoomChannel();
+});
+
+// ==========================================
+// 1. إعدادات الرسم المحلي والتشاركي (Broadcast)
+// ==========================================
+let drawing = false;
+let lastX = 0;
+let lastY = 0;
 
 function initDrawing() {
     resizeCanvas();
-    if (drawingInitialized) return;
-    drawingInitialized = true;
+    canvas.addEventListener('mousedown', startDrawing);
+    canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('mouseup', stopDrawing);
+    canvas.addEventListener('mouseleave', stopDrawing);
 
-    canvas.style.touchAction = 'none';
-    canvas.addEventListener('pointerdown', startDrawing, { passive: false });
-    canvas.addEventListener('pointermove', draw, { passive: false });
-    canvas.addEventListener('pointerup', stopDrawing);
-    canvas.addEventListener('pointercancel', stopDrawing);
-    canvas.addEventListener('lostpointercapture', stopDrawing);
-    window.addEventListener('resize', resizeCanvas, { passive: true });
+    canvas.addEventListener('touchstart', (e) => { 
+        e.preventDefault(); 
+        startDrawing(e.touches[0]); 
+    }, { passive: false });
+    
+    canvas.addEventListener('touchmove', (e) => { 
+        e.preventDefault(); 
+        draw(e.touches[0]); 
+    }, { passive: false });
+    
+    canvas.addEventListener('touchend', stopDrawing);
 }
 
-function startDrawing(event) {
-    if (event.pointerType === 'mouse' && event.button !== 0) return;
-    if (event.cancelable) event.preventDefault();
+function getCoordinates(e) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+    };
+}
+
+function startDrawing(e) {
     drawing = true;
-    if (canvas.setPointerCapture && event.pointerId !== undefined) {
-        canvas.setPointerCapture(event.pointerId);
-    }
-    ctx.beginPath();
-    const rect = canvas.getBoundingClientRect();
-    ctx.moveTo(event.clientX - rect.left, event.clientY - rect.top);
+    const coords = getCoordinates(e);
+    lastX = coords.x;
+    lastY = coords.y;
 }
 
-function draw(event) {
+function draw(e) {
     if (!drawing) return;
-    if (event.cancelable) event.preventDefault();
-    const rect = canvas.getBoundingClientRect();
-    ctx.lineWidth = Number(brushSize.value);
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.strokeStyle = isEraser ? '#ffffff' : colorPicker.value;
-    ctx.lineTo(event.clientX - rect.left, event.clientY - rect.top);
-    ctx.stroke();
+    const coords = getCoordinates(e);
+    const strokeColor = isEraser ? '#ffffff' : colorPicker.value;
+    const strokeWidth = brushSize.value;
+
+    // رسم الخط محلياً
+    drawLineOnCanvas(lastX, lastY, coords.x, coords.y, strokeColor, strokeWidth);
+
+    // إرسال إحداثيات الخط للطرف الآخر عبر Broadcast (كنسبة مئوية لتتناسب مع مختلف أحجام الشاشات)
+    if (roomChannel) {
+        roomChannel.send({
+            type: 'broadcast',
+            event: 'draw-stroke',
+            payload: {
+                x0: lastX / canvas.width,
+                y0: lastY / canvas.height,
+                x1: coords.x / canvas.width,
+                y1: coords.y / canvas.height,
+                color: strokeColor,
+                width: strokeWidth
+            }
+        });
+    }
+
+    lastX = coords.x;
+    lastY = coords.y;
 }
 
 function stopDrawing() {
     drawing = false;
 }
 
+function drawLineOnCanvas(x0, y0, x1, y1, color, width) {
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+    ctx.closePath();
+}
+
 eraserBtn.addEventListener('click', () => {
     isEraser = !isEraser;
-    eraserBtn.setAttribute('aria-pressed', String(isEraser));
     eraserBtn.style.background = isEraser ? '#ffb3c6' : 'white';
 });
 
 clearCanvasBtn.addEventListener('click', () => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (roomChannel) {
+        roomChannel.send({
+            type: 'broadcast',
+            event: 'clear-canvas',
+            payload: {}
+        });
+    }
 });
 
+// ==========================================
+// 2. الدردشة والمزامنة الفورية (Realtime + Broadcast)
+// ==========================================
 sendMsgBtn.addEventListener('click', sendMessage);
-messageInput.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' && !event.isComposing) {
-        event.preventDefault();
-        sendMessage();
-    }
+messageInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') sendMessage();
 });
 
 async function sendMessage() {
     const text = messageInput.value.trim();
-    if (!text || !currentRoom || !supabase || sendMsgBtn.disabled) return;
+    if (!text) return;
 
-    sendMsgBtn.disabled = true;
-    try {
-        const { data, error } = await supabase
-            .from('messages')
-            .insert({ room_code: currentRoom, sender: currentUser, content: text })
-            .select('*')
-            .single();
+    messageInput.value = '';
+    const { error } = await supabase.from('messages').insert([
+        { room_code: currentRoom, sender: currentUser, content: text }
+    ]);
 
-        if (error) throw error;
-        messageInput.value = '';
-        if (data) appendMessage(data);
-        else await loadMessages();
-    } catch (error) {
-        console.error('[Mawah] Failed to send message:', error);
-        alert('فشل إرسال الرسالة، تحقق من الاتصال والصلاحيات.');
-    } finally {
-        sendMsgBtn.disabled = false;
-        messageInput.focus();
+    if (error) {
+        console.error('Error sending message:', error);
+        alert('فشل إرسال الرسالة، تأكد من الاتصال');
     }
 }
 
 async function loadMessages() {
-    if (!supabase || !currentRoom) return;
-    const roomAtRequest = currentRoom;
     const { data, error } = await supabase
         .from('messages')
         .select('*')
-        .eq('room_code', roomAtRequest)
+        .eq('room_code', currentRoom)
         .order('created_at', { ascending: true });
 
-    if (roomAtRequest !== currentRoom) return;
-    if (error) {
-        console.error('[Mawah] Failed to load messages:', error);
-        return;
+    if (data) {
+        messagesList.innerHTML = '';
+        data.forEach(appendMessage);
+        messagesList.scrollTop = messagesList.scrollHeight;
     }
-    mergeMessages(data || []);
 }
 
-function mergeMessages(rows) {
-    for (const message of rows) {
-        if (message && message.id !== undefined && message.id !== null) {
-            messagesById.set(String(message.id), message);
-        }
-    }
-    renderMessages();
-}
-
-function appendMessage(message) {
-    if (!message || message.id === undefined || message.id === null) return;
-    if (messagesById.has(String(message.id))) return;
-    messagesById.set(String(message.id), message);
-    renderMessages();
-}
-
-function renderMessages() {
-    const keepAtBottom = messagesList.scrollHeight - messagesList.scrollTop - messagesList.clientHeight < 48;
-    const sortedMessages = Array.from(messagesById.values()).sort((a, b) => {
-        const timeDiff = new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
-        return timeDiff || String(a.id).localeCompare(String(b.id));
-    });
-    const fragment = document.createDocumentFragment();
-
-    for (const message of sortedMessages) {
-        const item = document.createElement('div');
-        item.dataset.id = String(message.id);
-        item.className = 'message ' + (message.sender === currentUser ? 'sent' : 'received');
-        item.textContent = String(message.sender || 'مجهول') + ': ' + String(message.content || '');
-        fragment.appendChild(item);
+function appendMessage(msg) {
+    const existingMessages = messagesList.children;
+    for (let child of existingMessages) {
+        if (child.dataset.id === String(msg.id)) return;
     }
 
-    messagesList.replaceChildren(fragment);
-    if (keepAtBottom) messagesList.scrollTop = messagesList.scrollHeight;
+    const div = document.createElement('div');
+    div.dataset.id = msg.id;
+    div.className = `message ${msg.sender === currentUser ? 'sent' : 'received'}`;
+    div.textContent = `${msg.sender}: ${msg.content}`;
+    messagesList.appendChild(div);
+    messagesList.scrollTop = messagesList.scrollHeight;
 }
 
-function subscribeToRealtime() {
-    if (!supabase || !currentRoom) return;
-    if (messageChannel) {
-        const previousChannel = messageChannel;
-        messageChannel = null;
-        void supabase.removeChannel(previousChannel);
+function setupRoomChannel() {
+    if (roomChannel) {
+        supabase.removeChannel(roomChannel);
     }
 
-    const roomAtSubscribe = currentRoom;
-    const channel = supabase
-        .channel('mawah-messages-' + encodeURIComponent(roomAtSubscribe))
+    roomChannel = supabase
+        .channel(`mawah-room-${currentRoom}`, {
+            config: {
+                broadcast: { self: false } // عدم استقبال الخطوط التي ترسمها أنت بنفسك
+            }
+        })
+        // 1. استقبال الرسائل الجديدة لحظياً
         .on(
             'postgres_changes',
-            {
-                event: 'INSERT',
-                schema: 'public',
+            { 
+                event: 'INSERT', 
+                schema: 'public', 
                 table: 'messages',
-                filter: 'room_code=eq.' + roomAtSubscribe
+                filter: `room_code=eq.${currentRoom}`
             },
             (payload) => {
-                if (payload.new && payload.new.room_code === currentRoom) {
-                    appendMessage(payload.new);
-                }
+                appendMessage(payload.new);
             }
-        );
-
-    messageChannel = channel;
-    channel.subscribe((status, error) => {
-        if (messageChannel !== channel) return;
-        if (status === 'SUBSCRIBED') {
-            setRealtimeStatus('متصل — الرسائل تصل فوراً', 'connected');
-            void loadMessages();
-        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-            console.error('[Mawah Realtime] Subscription failed:', error || status);
-            setRealtimeStatus('تعذر الاتصال اللحظي؛ تحقق من إعدادات Realtime في Supabase.', 'error');
-        } else if (status === 'CLOSED') {
-            messageChannel = null;
-            setRealtimeStatus('انقطع اتصال الغرفة.', 'offline');
-        }
-    });
+        )
+        // 2. استقبال خطوط الرسم من الطرف الآخر لحظياً
+        .on(
+            'broadcast',
+            { event: 'draw-stroke' },
+            ({ payload }) => {
+                drawLineOnCanvas(
+                    payload.x0 * canvas.width,
+                    payload.y0 * canvas.height,
+                    payload.x1 * canvas.width,
+                    payload.y1 * canvas.height,
+                    payload.color,
+                    payload.width
+                );
+            }
+        )
+        // 3. استقبال أمر مسح اللوحة من الطرف الآخر
+        .on(
+            'broadcast',
+            { event: 'clear-canvas' },
+            () => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+        )
+        .subscribe((status) => {
+            console.log('Room connection status:', status);
+        });
 }
 
-joinBtn.addEventListener('click', joinRoom);
-
-window.addEventListener('online', () => {
-    if (currentRoom && !messageChannel) subscribeToRealtime();
-});
-window.addEventListener('offline', () => {
-    setRealtimeStatus('انقطع اتصال الإنترنت.', 'offline');
-});
-
 logoutBtn.addEventListener('click', () => {
-    if (messageChannel && supabase) void supabase.removeChannel(messageChannel);
-    messageChannel = null;
-    currentRoom = null;
-    messagesById.clear();
-    mainScreen.classList.remove('active');
-    authScreen.classList.add('active');
-    joinBtn.disabled = !supabase;
+    if (roomChannel) supabase.removeChannel(roomChannel);
+    location.reload();
 });

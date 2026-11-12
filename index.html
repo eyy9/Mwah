@@ -5,38 +5,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>مواح - Mawah</title>
     <link rel="stylesheet" href="style.css">
-    <!-- مكتبة Supabase -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
-    <!-- شاشة تسجيل الدخول -->
     <div id="auth-screen" class="screen active">
         <div class="auth-card">
             <div class="heart-icon">💖</div>
             <h1>مواح - Mawah</h1>
             <p class="subtitle">«مكان إلنا نحن الاثنين»</p>
             <p class="quote">«خلينا نرسم شيئاً يشبهنا»</p>
-            <p class="sub-quote">«رسمة منك.. ورسمة مني... وكلها تبقى في مكان واحد يجمعنا مهما تباعدت المسافات.»</p>
 
             <div class="input-group">
-                <label for="partner-name">اسمك في المساحة (مثل: حبيبي أو جوري)</label>
-                <input type="text" id="partner-name" placeholder="جوري">
+                <label for="partner-name">اسمك في المساحة</label>
+                <input type="text" id="partner-name" placeholder="اكتب اسمك هنا">
             </div>
 
-            <button id="join-btn" class="primary-btn">أنشئ مساحتنا 💖</button>
-            
-            <div class="input-group" style="margin-top: 20px;">
-                <label for="room-code">أو انضم برمز دعوة</label>
-                <div style="display: flex; gap: 10px;">
-                    <input type="text" id="room-code" placeholder="ABCDEGHI" style="flex: 1;">
-                    <button id="join-code-btn" class="secondary-btn" style="padding: 0 20px; background: #ff4d6d; color: white; border: none; border-radius: 8px;">انضمام</button>
-                </div>
+            <div class="input-group">
+                <label for="room-code">رمز الغرفة</label>
+                <input type="text" id="room-code" placeholder="مثال: love">
             </div>
+
+            <button id="join-btn" class="primary-btn">أنشئ مساحتنا أو انضم 💖</button>
         </div>
     </div>
 
-    <!-- الشاشة الرئيسية (الرسم والدردشة) -->
     <div id="main-screen" class="screen">
         <header class="app-header">
             <h2 id="room-title">غرفة المساحة</h2>
@@ -44,7 +37,6 @@
         </header>
 
         <div class="workspace">
-            <!-- قسم الرسم -->
             <div class="canvas-container">
                 <div class="canvas-tools">
                     <input type="color" id="color-picker" value="#ff4d6d">
@@ -55,7 +47,6 @@
                 <canvas id="drawing-canvas"></canvas>
             </div>
 
-            <!-- قسم الدردشة -->
             <div class="chat-container">
                 <div id="messages-list" class="messages-list"></div>
                 <div class="chat-input-area">
@@ -65,10 +56,6 @@
             </div>
         </div>
     </div>
-
-    <footer class="app-footer">
-        <span class="netlify-badge">Powered by Netlify</span>
-    </footer>
 
     <script type="module" src="app.js"></script>
 </body>

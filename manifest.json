@@ -1,0 +1,16 @@
+{
+  "name": "Mawah – مواح | مكان إلنا نحن الاثنين",
+  "short_name": "مواح",
+  "description": "مساحة رقمية رومانسية للرسم والتواصل الفوري بين شخصين.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FCE6EF",
+  "theme_color": "#E85B98",
+  "dir": "rtl",
+  "lang": "ar",
+  "icons": [
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

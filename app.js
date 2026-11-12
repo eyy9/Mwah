@@ -1,6 +1,5 @@
 import { SUPABASE_CONFIG } from './config.js';
 
-// التحقق من تحميل مكتبة Supabase
 const supabaseLib = window.supabase;
 const supabase = supabaseLib ? supabaseLib.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.publishableKey || SUPABASE_CONFIG.anonKey) : null;
 
@@ -183,7 +182,7 @@ clearCanvasBtn.addEventListener('click', () => {
 });
 
 // ==========================================
-// 2. الدردشة والمزامنة الفورية
+// 2. الدردشة والمزامنة الفورية (مطابقة لأسماء الأعمدة الجديدة)
 // ==========================================
 sendMsgBtn.addEventListener('click', sendMessage);
 messageInput.addEventListener('keypress', (e) => {
@@ -194,14 +193,15 @@ async function sendMessage() {
     const text = messageInput.value.trim();
     if (!text) return;
 
+    // تم تعديل الأسماء لتطابق جدولك: room_id و sender_name
     const { data, error } = await supabase
         .from('messages')
-        .insert([{ room_code: currentRoom, sender: currentUser, content: text }])
+        .insert([{ room_id: currentRoom, sender_name: currentUser, content: text }])
         .select();
 
     if (error) {
         console.error('Supabase Insert Error:', error);
-        alert(`سبب رفض الرسالة: ${error.message}\n(تأكد من أسماء الأعمدة في جدول messages)`);
+        alert(`خطأ في الإرسال: ${error.message}`);
     } else {
         messageInput.value = '';
         if (data && data[0]) appendMessage(data[0]);
@@ -212,7 +212,7 @@ async function loadMessages() {
     const { data, error } = await supabase
         .from('messages')
         .select('*')
-        .eq('room_code', currentRoom)
+        .eq('room_id', currentRoom)
         .order('created_at', { ascending: true });
 
     if (error) {
@@ -235,8 +235,10 @@ function appendMessage(msg) {
 
     const div = document.createElement('div');
     div.dataset.id = msg.id || Date.now();
-    div.className = `message ${msg.sender === currentUser ? 'sent' : 'received'}`;
-    div.textContent = `${msg.sender}: ${msg.content}`;
+    // استخدام sender_name بدلاً من sender
+    const senderName = msg.sender_name || msg.sender || 'مجهول';
+    div.className = `message ${senderName === currentUser ? 'sent' : 'received'}`;
+    div.textContent = `${senderName}: ${msg.content}`;
     messagesList.appendChild(div);
     messagesList.scrollTop = messagesList.scrollHeight;
 }
@@ -256,7 +258,7 @@ function setupRoomChannel() {
                 event: 'INSERT',
                 schema: 'public',
                 table: 'messages',
-                filter: `room_code=eq.${currentRoom}`
+                filter: `room_id=eq.${currentRoom}`
             },
             (payload) => {
                 appendMessage(payload.new);

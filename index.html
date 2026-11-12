@@ -2,67 +2,51 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#E85B98">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>مواح - Mawah</title>
-    <link rel="manifest" href="./manifest.json">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mwah ❤️</title>
     <link rel="stylesheet" href="style.css">
+    <!-- استيراد مكتبة Supabase رسمياً من CDN المعتمد -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
+    <!-- شاشة الدخول -->
     <div id="auth-screen" class="screen active">
         <div class="auth-card">
-            <div class="heart-icon" aria-hidden="true">💖</div>
-            <h1>مواح - Mawah</h1>
-            <p class="subtitle">«مكان إلنا نحن الاثنين»</p>
-            <p class="quote">«خلينا نرسم شيئاً يشبهنا»</p>
-
-            <div class="input-group">
-                <label for="partner-name">اسمك في المساحة</label>
-                <input type="text" id="partner-name" placeholder="اكتب اسمك هنا" maxlength="32" autocomplete="nickname">
-            </div>
-
-            <div class="input-group">
-                <label for="room-code">رمز الغرفة</label>
-                <input type="text" id="room-code" placeholder="مثال: love" maxlength="64" autocapitalize="none" autocomplete="off">
-            </div>
-
-            <button id="join-btn" class="primary-btn" type="button">أنشئ مساحتنا أو انضم 💖</button>
-            <p id="setup-error" class="setup-error" role="alert" hidden></p>
+            <h2>Mwah ❤️</h2>
+            <input type="text" id="partner-name" placeholder="اسمك الجميل...">
+            <input type="text" id="room-code" placeholder="رمز الغرفة (مثل love)...">
+            <button id="join-btn">دخول للغرفة</button>
         </div>
     </div>
 
+    <!-- الشاشة الرئيسية (دردشة ورسم) -->
     <div id="main-screen" class="screen">
-        <header class="app-header">
-            <h2 id="room-title">غرفة المساحة</h2>
-            <button id="logout-btn" class="secondary-btn" type="button">خروج</button>
+        <header>
+            <button id="logout-btn">خروج</button>
+            <h3 id="room-title">غرفة</h3>
         </header>
-        <p id="realtime-status" class="connection-status" role="status" aria-live="polite" data-state="connecting">جارٍ الاتصال بالغرفة…</p>
+        
+        <div id="connection-status" class="status-banner">جارٍ الاتصال بالغرفة...</div>
 
-        <div class="workspace">
-            <section class="canvas-container" aria-label="مساحة الرسم">
-                <div class="canvas-tools">
-                    <label class="tool-control" for="color-picker">اللون</label>
-                    <input type="color" id="color-picker" value="#ff4d6d" aria-label="لون القلم">
-                    <label class="tool-control" for="brush-size">حجم القلم</label>
-                    <input type="range" id="brush-size" min="1" max="20" value="5" aria-label="حجم القلم">
-                    <button id="eraser-btn" type="button" aria-pressed="false">ممحاة</button>
-                    <button id="clear-canvas-btn" type="button">مسح الكل</button>
-                </div>
-                <canvas id="drawing-canvas" aria-label="ارسم هنا"></canvas>
-            </section>
+        <div class="canvas-container">
+            <canvas id="drawing-canvas"></canvas>
+            <div class="tools-bar">
+                <button id="eraser-btn">ممحاة</button>
+                <input type="range" id="brush-size" min="1" max="20" value="5">
+                <input type="color" id="color-picker" value="#d90429">
+                <button id="clear-canvas-btn">مسح الكل</button>
+            </div>
+        </div>
 
-            <section class="chat-container" aria-label="الدردشة">
-                <div id="messages-list" class="messages-list" role="log" aria-live="polite" aria-relevant="additions"></div>
-                <div class="chat-input-area">
-                    <input type="text" id="message-input" placeholder="اكتب رسالة لطيفة..." maxlength="2000" enterkeyhint="send" autocomplete="off" aria-label="رسالتك">
-                    <button id="send-msg-btn" type="button">إرسال</button>
-                </div>
-            </section>
+        <div class="chat-container">
+            <div id="messages-list"></div>
+            <div class="chat-input-area">
+                <input type="text" id="message-input" placeholder="اكتب رسالة لحبيبتك...">
+                <button id="send-msg-btn">إرسال</button>
+            </div>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script type="module" src="app.js"></script>
 </body>
 </html>
